@@ -1,0 +1,173 @@
+---
+title: "labour-market-indicators-rsa-v1"
+author: "JJayes"
+date: "24/09/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(scales)
+library(ggthemes)
+
+theme_set(theme_fivethirtyeight())
+theme_update(legend.position = "bottom")
+
+```
+
+### Purpose
+
+Ingest data from Quantec
+
+```{r}
+library(readxl)
+
+# index <- read_excel("data/20210924_093330526943_jonathan_jayes.xlsx", skip = 3) %>% 
+#     mutate(row_num = row_number()) %>% 
+#     filter(row_num %in% 2:5) %>% 
+#     mutate(across(where(is.numeric), as.character)) %>% view
+#     pivot_longer(-`Frequency: Quarterly`)
+
+df <- read_excel("data/20210924_093330526943_jonathan_jayes.xlsx", skip = 8) %>% 
+    mutate(code = as.Date(code)) %>% 
+    rename(quarter = code) %>% 
+    pivot_longer(-quarter, names_to = "code")
+
+codebook <- read_excel("data/quantec_qlfs_codebook.xlsx")
+
+df <- codebook %>% 
+    inner_join(df,by = "code")
+
+```
+
+## Testing
+
+```{r}
+
+df %>% 
+    filter(str_detect(title, "Sociodemographic")) %>%
+    ggplot(aes(quarter, value, fill = title)) +
+    geom_col() +
+    scale_y_continuous(labels = number_format(scale = 1000)) +
+    theme(legend.position = "bottom") +
+    labs(x = NULL,
+         y = glue::glue("Employed"))
+```
+
+## Employment
+
+### Economically active population
+
+Levels
+
+```{r}
+df %>%
+  filter(str_detect(code, c("P0211-LFSK_TOTAL_T_T_LF", "P0211-LFS_X0"))) %>%
+  ggplot(aes(quarter, value, colour = title)) +
+  geom_line() +
+  scale_y_continuous(labels = number_format(scale = 1000)) +
+  labs(
+    x = NULL,
+    y = glue::glue("Employed"),
+    colour = NULL
+  )
+```
+
+Growth
+
+```{r}
+df %>%
+  filter(str_detect(code, c("P0211-LFSK_TOTAL_T_T_LF", "P0211-LFS_X0"))) %>%
+  group_by(title) %>% 
+  mutate(value = (value / lag(value, n = 1)) - 1) %>%
+  ungroup() %>% 
+  mutate(min_q = min(quarter) + lubridate::days(180)) %>% 
+  filter(quarter > min_q) %>% 
+  ggplot(aes(quarter, value, colour = title)) +
+  geom_line() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    x = NULL,
+    y = glue::glue("Employed"),
+    colour = NULL
+  )
+```
+
+### Labour Force Participation Rate
+
+```{r}
+df %>%
+  filter(code %in% c("P0211-LFSK_TOTAL_T_T_PR", "P0211-LFS_XR2")) %>% 
+  ggplot(aes(quarter, value, colour = title)) +
+  geom_line() +
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  labs(
+    x = NULL,
+    y = "Labour Force Particiaption Rate",
+    colour = NULL
+  )
+```
+
+## Numbers employed by occupation
+
+levels
+
+```{r}
+df %>%
+  filter(str_detect(code, c("P0211-LFS_O[0-9][0-9]"))) %>%
+  mutate(title = str_remove(title, "Employed by occupation: Occupation")) %>%
+  ggplot(aes(quarter, value, fill = title)) +
+  geom_col(position = "stack") +
+  scale_y_continuous(labels = number_format(scale = 1000)) +
+  labs(
+    x = NULL,
+    y = glue::glue("Employed"),
+    fill = NULL
+  )
+
+df %>%
+  filter(str_detect(code, c("P0211-LFS_O[0-9][0-9]"))) %>%
+  mutate(title = str_remove(title, "Employed by occupation: Occupation")) %>%
+  ggplot(aes(quarter, value, colour = title)) +
+  geom_line() +
+  scale_y_continuous(labels = number_format(scale = 1000)) +
+  labs(
+    x = NULL,
+    y = glue::glue("Employed"),
+    colour = NULL
+  )
+```
+
+Change in the last year
+
+```{r}
+df %>%
+  filter(str_detect(code, c("P0211-LFS_O[0-9][0-9]"))) %>%
+  mutate(
+    title = str_remove(title, "Employed by occupation: Occupation"),
+    q_max_minus_4 = max(quarter) - lubridate::days(365)
+  ) %>%
+  filter(quarter > q_max_minus_4) %>%
+  mutate(
+    title = fct_reorder(title, value),
+    quarter = as.character(quarter)
+  ) %>%
+  ggplot(aes(value, title, fill = quarter)) +
+  geom_col(position = "dodge") +
+  theme(legend.position = "bottom") +
+  scale_x_continuous(labels = number_format(scale = 1000)) +
+  labs(
+    x = NULL,
+    y = glue::glue("Employed"),
+    fill = NULL
+  )
+```
+
+## Employment by level of education
+
+```{r}
+
+```
+
